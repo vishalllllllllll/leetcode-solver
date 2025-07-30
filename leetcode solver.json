@@ -1,0 +1,577 @@
+{
+  "name": "leetcode solver",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://leetcode.com/graphql",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\n  \"content-Type\":\"application/json\"\n}\n",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": \"query questionData($titleSlug: String!) { question(titleSlug: $titleSlug) { title content difficulty codeSnippets { lang code } } }\",\n  \"variables\": {\n    \"titleSlug\": \"{{ $('Fetch Daily Challenge').item.json.data.activeDailyCodingChallengeQuestion.question.titleSlug }}\"\n  }\n}\n\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        832,
+        0
+      ],
+      "id": "f5db291e-b536-4767-a490-331506c6e5ab",
+      "name": "Get Full Problem Content"
+    },
+    {
+      "parameters": {
+        "jsCode": "const q = $json.data.activeDailyCodingChallengeQuestion.question;\nreturn [{\n  title: q.title,\n  slug: q.titleSlug,\n  difficulty: q.difficulty\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "7bca40c4-cf67-4fd9-b7c9-cf421f3002a5",
+      "name": "Extract Challenge Info"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-4o-mini"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.prompt }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        -256,
+        304
+      ],
+      "id": "db17a3ec-fc1d-4713-b6dd-70967c052afd",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "ef9xtrMc25De5OLh",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://leetcode.com/graphql",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Referer",
+              "value": "=https://leetcode.com/problems/{{ $json.slug }}/"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": \"\\nquery questionContent($titleSlug: String!) {\\n  question(titleSlug: $titleSlug) {\\n    exampleTestcases\\n    sampleTestCase\\n    codeSnippets {\\n      lang\\n      code\\n    }\\n  }\\n}\\n\",\n  \"variables\": {\n    \"titleSlug\": \"{{ $json.slug }}\"\n  }\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "07b37475-7322-4db8-b57b-2e55f82a277f",
+      "name": "Fetch Test Cases"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://leetcode.com/graphql",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\n  \"Content-Type\": \"application/json\"\n}\n",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"query\": \"query questionOfToday { activeDailyCodingChallengeQuestion { question { titleSlug title difficulty questionId } } }\"\n}\n\n\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "299bfa24-648a-4633-bc38-2dc9f1a4a5b3",
+      "name": "Fetch Daily Challenge"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://emkc.org/api/v2/piston/execute",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        832,
+        304
+      ],
+      "id": "9bfa3f4c-0ceb-483b-b6c4-d322f074d62c",
+      "name": "Run on Piston"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://emkc.org/api/v2/piston/execute",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"language\": \"python3\",\n  \"version\": \"3.10.0\",\n  \"files\": [\n    {\n      \"name\": \"main.py\",\n      \"content\": {{ $('patch function name').first().json.code.toJsonString() }}\n    }\n  ],\n  \"stdin\": \"\"\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        304
+      ],
+      "id": "a38583f7-1069-4df9-b28b-bae5049d15ab",
+      "name": "Prepare piston payload"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputs = $input.all().map((item) => item.json);\nconst code = $(\"python patch imports\").all()[0]?.json?.code;\nconst expectedOutput = $(\"Extract Expected Output\").all()[0]?.json\n  ?.expectedOutput;\n\nconst payload = inputs.map((input) => {\n  return {\n    language: input.language,\n    version: input.version,\n    files: [\n      {\n        name: \"main.py\",\n        content: code,\n      },\n    ],\n    stdin: expectedOutput,\n    run: input.run,\n  };\n});\n\nreturn payload;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        304
+      ],
+      "id": "7382c3ea-4975-4c80-8c98-97d355609c3b",
+      "name": "Build piston payload"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawOutput = $json.run?.output?.trim() || $json.run?.stdout?.trim() || '';\nconst actual = rawOutput.trim();\nconst expectedRaw = $('Extract Expected Output').first()?.json?.expectedOutput?.trim() || '';\n\nlet passed = false;\nlet normalizedActual = actual;\nlet normalizedExpected = expectedRaw;\n\ntry {\n  // Try parsing as JSON (for lists or structured output)\n  const actualParsed = JSON.parse(actual);\n  const expectedParsed = JSON.parse(expectedRaw);\n\n  if (Array.isArray(actualParsed) && Array.isArray(expectedParsed)) {\n    passed =\n      actualParsed.length === expectedParsed.length &&\n      actualParsed.every((val, i) => val == expectedParsed[i]);\n    normalizedActual = JSON.stringify(actualParsed);\n    normalizedExpected = JSON.stringify(expectedParsed);\n  } else {\n    passed = actualParsed == expectedParsed;\n    normalizedActual = String(actualParsed);\n    normalizedExpected = String(expectedParsed);\n  }\n} catch (err) {\n  // If JSON parsing fails, compare as trimmed strings\n  passed = actual === expectedRaw;\n}\n\nreturn [\n  {\n    json: {\n      passed,\n      output: normalizedActual,\n      expected: normalizedExpected,\n      status: passed ? '✅ Passed' : '❌ Failed'\n    }\n  }\n];\n\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1008,
+        304
+      ],
+      "id": "f4b7e21d-ca1f-446f-80e0-37b499a8ce14",
+      "name": "Test Result Parser"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst updatedItems = items.map((item) => {\n  const status = item.json.status?.toLowerCase() || '';\n  item.json.passed = status.includes(\"passed\");\n  return item;\n});\nreturn updatedItems;\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1184,
+        304
+      ],
+      "id": "56135228-15e2-45a3-bd23-64f7816865fa",
+      "name": "Parse and test result from piston"
+    },
+    {
+      "parameters": {
+        "jsCode": "const html = $json.data.question.content || '';\n\nconst outputRegex = /<strong>Output:<\\/strong>\\s*([\\s\\S]*?)<\\/?pre>/i;\nconst match = html.match(outputRegex);\n\nlet expectedOutput = '';\nif (match && match[1]) {\n  expectedOutput = match[1].trim().split('\\n')[0].trim();\n}\n\n// fallback or sanitize\nexpectedOutput = expectedOutput.replace(/<\\/?[^>]+(>|$)/g, '').trim();\n\nreturn [{\n  json: {\n    expectedOutput\n  }\n}];\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "9630946d-9b78-4b61-93be-1311f2a8c9d0",
+      "name": "Extract Expected Output"
+    },
+    {
+      "parameters": {
+        "jsCode": "const title = $('Extract Challenge Info').first()?.json?.title || 'Unknown Title';\nconst difficulty = $('Extract Challenge Info').first()?.json?.difficulty || 'Unknown';\nconst html = $('Get Full Problem Content').first()?.json?.data?.question?.content || 'No description provided.';\nconst expectedOutput = $('Extract Expected Output').first()?.json?.expectedOutput || '[]';\n\n// Convert simple HTML to plain text\nconst textContent = html\n  .replace(/<\\/?(?!p|br|li|ul|ol|b|strong|em)[^>]+>/g, '') // remove all but basic tags\n  .replace(/<br\\s*\\/?>/gi, '\\n')\n  .replace(/<\\/p>/gi, '\\n')\n  .replace(/<li>/gi, ' - ')\n  .replace(/<\\/li>/gi, '\\n')\n  .replace(/<\\/?[^>]+(>|$)/g, '') // remove remaining tags\n  .replace(/\\n{2,}/g, '\\n')\n  .trim();\n\nconst prompt = `\nYou are a competitive programmer.\n\nSolve the following LeetCode problem in Python 3.\n\nRules:\n- Use class-based format as required by LeetCode.\n- Implement only the solution method inside the class.\n- Do NOT include input() or print() statements.\n- Do NOT include test code, explanations, or comments.\n- Define a method named 'solve' inside the class.\n- If expected output is a list (e.g. ${expectedOutput}), ensure your function returns that format.\n- Avoid returning integers or strings unless explicitly required.\n\nProblem Title: ${title}\nDifficulty: ${difficulty}\nExpected Output Format: ${expectedOutput}\n\nProblem Description:\n${textContent}\n`.trim();\n\nreturn [\n  {\n    json: {\n      prompt\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        0
+      ],
+      "id": "567c9132-7ab8-40c4-a702-e10ae12686a2",
+      "name": "send prompt to ai model"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "4fbdb43c-1c92-4c09-9825-1cb2408b253e",
+              "name": "ProblemTitle",
+              "value": "={{ $('Extract Challenge Info').item.json.title }}",
+              "type": "string"
+            },
+            {
+              "id": "597ef52e-e188-438c-93c1-30abd3cd58b0",
+              "name": "language",
+              "value": "={{ $('Build piston payload').item.json.language }}",
+              "type": "string"
+            },
+            {
+              "id": "bc7c3803-3c18-48ab-baf1-25be5395c926",
+              "name": "solutionCode",
+              "value": "={{ $('python patch imports').item.json.code }}",
+              "type": "string"
+            },
+            {
+              "id": "5b81f5cb-6672-45ab-a8a0-3154dcfef613",
+              "name": "",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1360,
+        304
+      ],
+      "id": "504a30bb-889c-4182-8239-172d796e8c79",
+      "name": "get submission info"
+    },
+    {
+      "parameters": {
+        "jsCode": "let rawCode = $json.content || $json.message?.content || '';\nrawCode = rawCode.replace(/```(?:python)?|```/g, '').trim();\n\n// ✅ Extract correct function name from LeetCode snippet\nconst codeSnippets = $('Fetch Test Cases').first()?.json?.data?.question?.codeSnippets || [];\nconst pythonSnippet = codeSnippets.find(snippet => snippet.lang === 'Python3')?.code || '';\nconst match = pythonSnippet.match(/def\\s+(\\w+)\\s*\\(/);\nconst functionName = match ? match[1] : 'solve';\n\n// ✅ Replace model's function name with correct one\nrawCode = rawCode.replace(/def\\s+\\w+\\s*\\(/, `def ${functionName}(`);\n\n// ✅ Prepare input args\nconst rawInput = $('Fetch Test Cases').first()?.json?.data?.question?.sampleTestCase?.trim() || '';\nlet args = '';\n\nif (rawInput.startsWith('[')) {\n  args = rawInput;\n} else if (rawInput.includes('\\n')) {\n  const lines = rawInput.split('\\n').map(x => x.trim());\n  const parsed = lines.map(line => {\n    if (/^\\[.*\\]$/.test(line)) return line;\n    if (/^\\d(\\s+\\d+)*$/.test(line)) {\n      const arr = line.split(/\\s+/).map(Number);\n      return `[${arr.join(',')}]`;\n    }\n    return line;\n  });\n  args = parsed.join(', ');\n} else {\n  args = rawInput;\n}\n\n// ✅ Check if typing imports needed\nlet typesToImport = [];\nif (rawCode.includes('List[')) typesToImport.push('List');\nif (rawCode.includes('Dict[')) typesToImport.push('Dict');\nif (rawCode.includes('Set[')) typesToImport.push('Set');\nif (rawCode.includes('Tuple[')) typesToImport.push('Tuple');\n\nlet importLine = typesToImport.length > 0 ? `from typing import ${typesToImport.join(', ')}\\n\\n` : '';\nif (rawCode.startsWith(importLine.trim())) importLine = '';\n\nconst finalCode = `${importLine}${rawCode}\\n\\nprint(Solution().${functionName}(${args}))`;\n\nreturn [\n  {\n    json: {\n      code: finalCode,\n      functionName: functionName\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        96,
+        304
+      ],
+      "id": "72be495f-3c5b-470e-acc2-738debdfc974",
+      "name": "python patch imports"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8435145298:AAE-dw7GD-XBBxf8vFdBkhLQE7M1t9pRzyg/sendMessage",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "=5757633031"
+            },
+            {
+              "name": "text",
+              "value": "=Daily LeetCode Challenge:{{ $json.ProblemTitle }}\n\nYour Solution: {{ $json.solutionCode }}\n\nTest Cases: {{ $('Fetch Test Cases').item.json.data.question.sampleTestCase }}\n\nExpected Output: {{ $('Extract Expected Output').item.json.expectedOutput }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1520,
+        304
+      ],
+      "id": "c6076132-508b-4fe9-9551-14012ec9c406",
+      "name": "telegram bot"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get generated code from previous node\nconst code = $('python patch imports').first()?.json?.code || '';\n\n// Extract correct function name from LeetCode's official code snippet\nconst codeSnippets = $('Fetch Test Cases').first()?.json?.data?.question?.codeSnippets || [];\nconst pythonSnippet = codeSnippets.find(snippet => snippet.lang === 'Python3')?.code || '';\nconst match = pythonSnippet.match(/def\\s+(\\w+)\\s*\\(/);\nconst leetCodeFunctionName = match ? match[1] : 'solve';\n\n// Replace first function definition in the generated code with the correct one\nconst patchedCode = code.replace(/def\\s+\\w+\\s*\\(/, `def ${leetCodeFunctionName}(`);\n\n// Return both patched code and function name\nreturn [\n  {\n    json: {\n      code: patchedCode,\n      functionName: leetCodeFunctionName\n    }\n  }\n];\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        304
+      ],
+      "id": "8003a791-4842-4486-98ce-c4f51b860ecd",
+      "name": "patch function name"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -192,
+        0
+      ],
+      "id": "a8ca936d-13bd-448d-87a0-8a8bf3a214df",
+      "name": "Telegram Trigger",
+      "webhookId": "755ed659-e372-4b6f-9993-4d8936df0446",
+      "credentials": {
+        "telegramApi": {
+          "id": "0oXWS3QVg6qwgBKo",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "68b6177a-95f5-437e-a1cf-6419d68a0b3a",
+              "name": "chat_id",
+              "value": "={{ $json.message.chat.id }}",
+              "type": "string"
+            },
+            {
+              "id": "b37ab461-ea99-462a-9012-d84200f168b3",
+              "name": "first_name",
+              "value": "={{ $json.message.from.first_name }}",
+              "type": "string"
+            },
+            {
+              "id": "62a4e518-64a3-4ad5-abc9-c5844e9ec628",
+              "name": "user_text",
+              "value": "={{ $json.message.text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "8c05d598-2a15-4567-91b1-e07b0ba4e669",
+      "name": "get id,name,text"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Extract Challenge Info": {
+      "main": [
+        [
+          {
+            "node": "Fetch Test Cases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Full Problem Content": {
+      "main": [
+        [
+          {
+            "node": "Extract Expected Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "python patch imports",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Test Cases": {
+      "main": [
+        [
+          {
+            "node": "Get Full Problem Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Daily Challenge": {
+      "main": [
+        [
+          {
+            "node": "Extract Challenge Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare piston payload": {
+      "main": [
+        [
+          {
+            "node": "Build piston payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build piston payload": {
+      "main": [
+        [
+          {
+            "node": "Run on Piston",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run on Piston": {
+      "main": [
+        [
+          {
+            "node": "Test Result Parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Result Parser": {
+      "main": [
+        [
+          {
+            "node": "Parse and test result from piston",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse and test result from piston": {
+      "main": [
+        [
+          {
+            "node": "get submission info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Expected Output": {
+      "main": [
+        [
+          {
+            "node": "send prompt to ai model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "send prompt to ai model": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get submission info": {
+      "main": [
+        [
+          {
+            "node": "telegram bot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "python patch imports": {
+      "main": [
+        [
+          {
+            "node": "patch function name",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "patch function name": {
+      "main": [
+        [
+          {
+            "node": "Prepare piston payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "get id,name,text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get id,name,text": {
+      "main": [
+        [
+          {
+            "node": "Fetch Daily Challenge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "01e677df-281f-474a-9ace-fe80258fc33a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "bf24914819877f303aaf6042bbac4022bc65e052b8c925352b5f0776c034d061"
+  },
+  "id": "FkTvwQjAtwXsOZTI",
+  "tags": []
+}
